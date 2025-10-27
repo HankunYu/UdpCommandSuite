@@ -1,0 +1,34 @@
+{
+    "name": "udp-command-hosttool",
+    "version": "0.1.0",
+    "description": "Electron UI for broadcasting UDP commands and monitoring UDP client registrations.",
+    "main": "src/main.js",
+    "author": "",
+    "license": "UNLICENSED",
+    "scripts": {
+        "start": "electron .",
+        "build": "electron-builder"
+    },
+    "devDependencies": {
+        "electron": "^30.0.0",
+        "electron-builder": "^24.9.1"
+    },
+    "build": {
+        "appId": "com.mnemosyne.udpcommand.hosttool",
+        "productName": "UDP Command Host Tool",
+        "directories": {
+            "output": "dist"
+        },
+        "files": [
+            "src/**/*",
+            "package.json"
+        ],
+        "mac": {
+            "target": [
+                "dmg",
+                "zip"
+            ],
+            "category": "public.app-category.utilities"
+        }
+    }
+}
