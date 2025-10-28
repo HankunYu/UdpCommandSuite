@@ -26,6 +26,8 @@
     const deviceStats = document.getElementById('deviceStats');
     const selectAllButton = document.getElementById('selectAllDevices');
     const clearSelectionButton = document.getElementById('clearSelection');
+    const viewTabs = Array.from(document.querySelectorAll('.view-tab'));
+    const pages = new Map(Array.from(document.querySelectorAll('.page')).map((page) => [page.id, page]));
 
     const clients = new Map();
     const selectedDevices = new Set();
@@ -41,6 +43,23 @@
     const HEARTBEAT_TIMEOUT_SECONDS = HEARTBEAT_TIMEOUT_MS / 1000;
     const CMD_ID_MODE_AUTO = 'auto';
     const CMD_ID_MODE_MANUAL = 'manual';
+    function setActivePage(targetId) {
+        if (!targetId || !pages.has(targetId)) {
+            return;
+        }
+
+        viewTabs.forEach((tab) => {
+            const isActive = tab.dataset.target === targetId;
+            tab.classList.toggle('active', isActive);
+            tab.setAttribute('aria-selected', String(isActive));
+        });
+
+        pages.forEach((page, id) => {
+            const isActive = id === targetId;
+            page.classList.toggle('active', isActive);
+            page.hidden = !isActive;
+        });
+    }
 
     function loadCustomDeviceNames() {
         const fallback = Object.create(null);
@@ -95,6 +114,14 @@
         saveCustomDeviceNames();
     }
 
+    function getShortDeviceId(deviceId) {
+        if (!deviceId) {
+            return '';
+        }
+
+        return String(deviceId).slice(0, 6);
+    }
+
     function getDeviceDisplayName(key, device) {
         const stored = getStoredCustomName(key);
         if (stored) {
@@ -105,8 +132,9 @@
             return device.deviceName;
         }
 
-        if (device?.deviceId) {
-            return device.deviceId;
+        const shortId = getShortDeviceId(device?.deviceId);
+        if (shortId) {
+            return shortId;
         }
 
         if (device?.ipv4) {
@@ -300,12 +328,20 @@
         return `${deltaDays}d 前`;
     }
 
-    function createDetail(label, value) {
+    function formatDeviceScene(device) {
+        const scene = typeof device?.scene === 'string' ? device.scene.trim() : '';
+        return scene || '空闲';
+    }
+
+    function createDetail(label, value, options = {}) {
         const row = document.createElement('span');
         const labelEl = document.createElement('strong');
         labelEl.textContent = label;
         const valueEl = document.createElement('span');
         valueEl.textContent = value || '—';
+        if (options.title) {
+            valueEl.title = options.title;
+        }
         row.append(labelEl, valueEl);
         return row;
     }
@@ -447,7 +483,7 @@
 
                 const trimmed = nameInput.value.trim();
                 const stored = getStoredCustomName(key);
-                const defaultName = device.deviceName || device.deviceId || '';
+                const defaultName = device.deviceName || getShortDeviceId(device.deviceId) || device.deviceId || '';
                 const shouldClear = trimmed.length === 0 || trimmed === defaultName;
                 if (shouldClear) {
                     if (stored) {
@@ -513,7 +549,7 @@
 
             const badge = document.createElement('span');
             badge.className = 'badge';
-            badge.textContent = isOffline ? '离线' : (device.scene || 'Idle');
+            badge.textContent = isOffline ? '离线' : '在线';
 
             const beepButton = document.createElement('button');
             beepButton.type = 'button';
@@ -542,7 +578,12 @@
             const details = document.createElement('div');
             details.className = 'details';
             details.append(
-                createDetail('设备ID', device.deviceId),
+                createDetail(
+                    '设备ID',
+                    getShortDeviceId(device.deviceId),
+                    { title: device.deviceId || '' }
+                ),
+                createDetail('场景', formatDeviceScene(device), { title: device.scene || '' }),
                 createDetail('IPv4', device.ipv4 || device.remoteAddress || '未知'),
                 createDetail('命令端口', device.commandPort ? String(device.commandPort) : (portInput.value || '—')),
                 createDetail('平台', device.platform || '—'),
@@ -550,21 +591,42 @@
                 createDetail('电量', formatBattery(device))
             );
 
-            const toggleButton = document.createElement('button');
-            toggleButton.type = 'button';
-            toggleButton.className = 'select-toggle';
+            const actionRow = document.createElement('div');
+            actionRow.className = 'card-actions';
+
             if (isOffline) {
-                toggleButton.textContent = '离线';
-                toggleButton.disabled = true;
+                const offlineTag = document.createElement('button');
+                offlineTag.type = 'button';
+                offlineTag.className = 'select-toggle offline-indicator';
+                offlineTag.textContent = '离线';
+                offlineTag.disabled = true;
+
+                const removeButton = document.createElement('button');
+                removeButton.type = 'button';
+                removeButton.className = 'remove-button';
+                removeButton.textContent = '移除';
+                removeButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    clients.delete(key);
+                    selectedDevices.delete(key);
+                    setStoredCustomName(key, '');
+                    renderDeviceGrid();
+                });
+
+                actionRow.append(offlineTag, removeButton);
             } else {
+                const toggleButton = document.createElement('button');
+                toggleButton.type = 'button';
+                toggleButton.className = 'select-toggle';
                 toggleButton.textContent = selectedDevices.has(key) ? '取消选择' : '选择设备';
                 toggleButton.addEventListener('click', (event) => {
                     event.stopPropagation();
                     toggleDeviceSelection(key);
                 });
+                actionRow.append(toggleButton);
             }
 
-            card.append(header, lastSeen, details, toggleButton);
+            card.append(header, lastSeen, details, actionRow);
             if (!isOffline) {
                 card.addEventListener('click', (event) => {
                     if (event.target instanceof HTMLButtonElement) {
@@ -871,6 +933,13 @@
         }
     }
 
+    viewTabs.forEach((tab) => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.target;
+            setActivePage(target);
+        });
+    });
+
     includeCmdIdInput.addEventListener('change', () => {
         updateCmdIdState();
         buildPreview();
@@ -938,6 +1007,7 @@
     updateListenStatus('绑定中...');
     applyListenPort(DEFAULT_LISTEN_PORT);
     setInterval(renderDeviceGrid, 15000);
+    setActivePage(viewTabs[0]?.dataset.target || 'devicesView');
 
     form.addEventListener('submit', async (event) => {
         event.preventDefault();

@@ -6,123 +6,131 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header class="app-header">
-    <div>
-        <h1>UDP Host Console</h1>
-        <p>管理指令广播与设备状态。</p>
-    </div>
-</header>
-<main class="dashboard">
-    <section class="panel devices-panel">
-        <div class="panel-header">
-            <div>
-                <h2>设备</h2>
-                <p id="deviceStats" class="muted">等待注册...</p>
-            </div>
-            <div class="panel-actions">
-                <button type="button" id="selectAllDevices" class="ghost">全选</button>
-                <button type="button" id="clearSelection" class="ghost">清除</button>
-            </div>
-        </div>
-        <div id="deviceGrid" class="device-grid">
-            <p class="placeholder">暂无设备上线。</p>
-        </div>
-    </section>
-
-    <section class="panel command-panel">
-        <div class="panel-header">
-            <h2>发送指令</h2>
-            <span id="selectionSummary" class="chip">目标：手动指定</span>
-        </div>
-        <form id="commandForm" class="panel-body">
-            <div class="command-tabs" role="tablist">
-                <button type="button" id="tabBasic" class="tab-button active" role="tab" aria-selected="true" aria-controls="basicCommandPanel">基础</button>
-                <button type="button" id="tabAdvanced" class="tab-button" role="tab" aria-selected="false" aria-controls="advancedCommandPanel">高级</button>
-            </div>
-            <div id="basicCommandPanel" class="tab-panel active" role="tabpanel" aria-labelledby="tabBasic">
-                <label class="field">
-                    <span>指令 Action</span>
-                    <input id="action" type="text" placeholder="ToggleCredits" required>
-                </label>
-            </div>
-            <div id="advancedCommandPanel" class="tab-panel" role="tabpanel" aria-labelledby="tabAdvanced" hidden>
-                <div class="form-grid">
-                    <label class="field">
-                        <span>命令端口</span>
-                        <input id="targetPort" type="number" min="1" max="65535" value="3939" required>
-                    </label>
-                    <label class="field full">
-                        <span>手动目标主机</span>
-                        <input id="targetHost" type="text" value="255.255.255.255" placeholder="255.255.255.255">
-                        <span class="hint">未选择设备时将使用该地址。</span>
-                    </label>
-                    <label class="field full">
-                        <span>Payload (JSON)</span>
-                        <textarea id="payload" rows="5" placeholder='{"enabled":true}'></textarea>
-                    </label>
-                    <label class="field">
-                        <span>Shared Secret</span>
-                        <input id="sharedSecret" type="text" autocomplete="off" placeholder="可选">
-                    </label>
-                    <label class="field checkbox full">
-                        <input id="autoTimestamp" type="checkbox" checked>
-                        <span>发送时自动填充当前时间戳</span>
-                    </label>
-                    <label class="field">
-                        <span>时间戳 (ms)</span>
-                        <div class="control-group">
-                            <input id="timestamp" type="number">
-                            <button type="button" id="setNow">当前</button>
+<div class="app-shell">
+    <nav class="view-tabs" role="tablist">
+        <button type="button" id="tabDevicesView" class="view-tab active" role="tab" aria-selected="true" aria-controls="devicesView" data-target="devicesView">设备控制</button>
+        <button type="button" id="tabMonitorView" class="view-tab" role="tab" aria-selected="false" aria-controls="monitorView" data-target="monitorView">监听与日志</button>
+    </nav>
+    <main class="page-container">
+        <section id="devicesView" class="page active" role="tabpanel" aria-labelledby="tabDevicesView">
+            <div class="devices-layout">
+                <section class="panel devices-panel">
+                    <div class="panel-header">
+                        <div>
+                            <h2>设备</h2>
+                            <p id="deviceStats" class="muted">等待注册...</p>
                         </div>
-                    </label>
-                    <label class="field checkbox">
-                        <input id="includeCmdId" type="checkbox" checked>
-                        <span>自动生成 cmdId</span>
-                    </label>
-                    <label class="field">
-                        <span>自定义 cmdId</span>
-                        <div class="control-group">
-                            <input id="cmdId" type="text" placeholder="自动" maxlength="32">
-                            <button type="button" id="generateCmdId">生成</button>
+                        <div class="panel-actions">
+                            <button type="button" id="selectAllDevices" class="ghost">全选</button>
+                            <button type="button" id="clearSelection" class="ghost">清除</button>
                         </div>
-                    </label>
-                    <label class="field full">
-                        <span>预览</span>
-                        <pre id="preview" class="preview"></pre>
-                    </label>
-                </div>
-            </div>
-            <div class="form-footer">
-                <span id="status" class="status-text"></span>
-                <button type="submit" class="primary">发送指令</button>
-            </div>
-        </form>
-    </section>
+                    </div>
+                    <div id="deviceGrid" class="device-grid">
+                        <p class="placeholder">暂无设备上线。</p>
+                    </div>
+                </section>
 
-    <section class="panel listener-panel">
-        <div class="panel-header">
-            <h2>主机监听</h2>
-            <span id="listenStatus" class="chip subtle">准备中...</span>
-        </div>
-        <div class="panel-body">
-            <label class="field">
-                <span>监听端口</span>
-                <div class="control-group">
-                    <input id="listenPort" type="number" min="0" max="65535" value="4949">
-                    <button type="button" id="setListenPort">应用</button>
-                </div>
-            </label>
-            <p class="hint">耳机将在该端口发送注册与心跳信息。</p>
-        </div>
-    </section>
+                <section class="panel command-panel">
+                    <div class="panel-header">
+                        <h2>发送指令</h2>
+                        <span id="selectionSummary" class="chip">目标：手动指定</span>
+                    </div>
+                    <form id="commandForm" class="panel-body">
+                        <div class="command-tabs" role="tablist">
+                            <button type="button" id="tabBasic" class="tab-button active" role="tab" aria-selected="true" aria-controls="basicCommandPanel">基础</button>
+                            <button type="button" id="tabAdvanced" class="tab-button" role="tab" aria-selected="false" aria-controls="advancedCommandPanel">高级</button>
+                        </div>
+                        <div id="basicCommandPanel" class="tab-panel active" role="tabpanel" aria-labelledby="tabBasic">
+                            <label class="field">
+                                <span>指令 Action</span>
+                                <input id="action" type="text" placeholder="ToggleCredits" required>
+                            </label>
+                        </div>
+                        <div id="advancedCommandPanel" class="tab-panel" role="tabpanel" aria-labelledby="tabAdvanced" hidden>
+                            <div class="form-grid">
+                                <label class="field">
+                                    <span>命令端口</span>
+                                    <input id="targetPort" type="number" min="1" max="65535" value="3939" required>
+                                </label>
+                                <label class="field full">
+                                    <span>手动目标主机</span>
+                                    <input id="targetHost" type="text" value="255.255.255.255" placeholder="255.255.255.255">
+                                    <span class="hint">未选择设备时将使用该地址。</span>
+                                </label>
+                                <label class="field full">
+                                    <span>Payload (JSON)</span>
+                                    <textarea id="payload" rows="5" placeholder='{"enabled":true}'></textarea>
+                                </label>
+                                <label class="field">
+                                    <span>Shared Secret</span>
+                                    <input id="sharedSecret" type="text" autocomplete="off" placeholder="可选">
+                                </label>
+                                <label class="field checkbox full">
+                                    <input id="autoTimestamp" type="checkbox" checked>
+                                    <span>发送时自动填充当前时间戳</span>
+                                </label>
+                                <label class="field">
+                                    <span>时间戳 (ms)</span>
+                                    <div class="control-group">
+                                        <input id="timestamp" type="number">
+                                        <button type="button" id="setNow">当前</button>
+                                    </div>
+                                </label>
+                                <label class="field checkbox">
+                                    <input id="includeCmdId" type="checkbox" checked>
+                                    <span>自动生成 cmdId</span>
+                                </label>
+                                <label class="field">
+                                    <span>自定义 cmdId</span>
+                                    <div class="control-group">
+                                        <input id="cmdId" type="text" placeholder="自动" maxlength="32">
+                                        <button type="button" id="generateCmdId">生成</button>
+                                    </div>
+                                </label>
+                                <label class="field full">
+                                    <span>预览</span>
+                                    <pre id="preview" class="preview"></pre>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-footer">
+                            <span id="status" class="status-text"></span>
+                            <button type="submit" class="primary">发送指令</button>
+                        </div>
+                    </form>
+                </section>
+            </div>
+        </section>
 
-    <section class="panel log-panel">
-        <div class="panel-header">
-            <h2>活动日志</h2>
-        </div>
-        <div id="log" class="log"></div>
-    </section>
-</main>
+        <section id="monitorView" class="page" role="tabpanel" aria-labelledby="tabMonitorView" hidden>
+            <div class="monitor-layout">
+                <section class="panel listener-panel">
+                    <div class="panel-header">
+                        <h2>主机监听</h2>
+                        <span id="listenStatus" class="chip subtle">准备中...</span>
+                    </div>
+                    <div class="panel-body">
+                        <label class="field">
+                            <span>监听端口</span>
+                            <div class="control-group">
+                                <input id="listenPort" type="number" min="0" max="65535" value="4949">
+                                <button type="button" id="setListenPort">应用</button>
+                            </div>
+                        </label>
+                        <p class="hint">耳机将在该端口发送注册与心跳信息。</p>
+                    </div>
+                </section>
+
+                <section class="panel log-panel">
+                    <div class="panel-header">
+                        <h2>活动日志</h2>
+                    </div>
+                    <div id="log" class="log"></div>
+                </section>
+            </div>
+        </section>
+    </main>
+</div>
 <script src="renderer.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('node:path');
 const dgram = require('node:dgram');
 const os = require('node:os');
@@ -11,11 +11,18 @@ let listenPort = 4949;
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 960,
-        height: 760,
+        height: Math.floor(760 * 1.3),
+        autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
         },
     });
+
+    Menu.setApplicationMenu(null);
+    mainWindow.setMenuBarVisibility(false);
+    if (typeof mainWindow.removeMenu === 'function') {
+        mainWindow.removeMenu();
+    }
 
     mainWindow.on('closed', () => {
         mainWindow = null;
