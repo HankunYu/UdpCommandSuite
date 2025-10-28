@@ -29,6 +29,8 @@
 
     const clients = new Map();
     const selectedDevices = new Set();
+    const CUSTOM_NAME_STORAGE_KEY = 'udpHost.customDeviceNames';
+    const customDeviceNames = loadCustomDeviceNames();
     let discoveredHost = null;
     let currentListenMessage = '准备中...';
     let listenHasError = false;
@@ -39,6 +41,168 @@
     const HEARTBEAT_TIMEOUT_SECONDS = HEARTBEAT_TIMEOUT_MS / 1000;
     const CMD_ID_MODE_AUTO = 'auto';
     const CMD_ID_MODE_MANUAL = 'manual';
+
+    function loadCustomDeviceNames() {
+        const fallback = Object.create(null);
+        if (!window.localStorage) {
+            return fallback;
+        }
+
+        try {
+            const raw = window.localStorage.getItem(CUSTOM_NAME_STORAGE_KEY);
+            if (!raw) {
+                return fallback;
+            }
+
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+                return Object.assign(Object.create(null), parsed);
+            }
+        } catch {
+            // ignore storage read errors
+        }
+
+        return fallback;
+    }
+
+    function saveCustomDeviceNames() {
+        if (!window.localStorage) {
+            return;
+        }
+
+        try {
+            window.localStorage.setItem(CUSTOM_NAME_STORAGE_KEY, JSON.stringify(customDeviceNames));
+        } catch {
+            // ignore storage write errors
+        }
+    }
+
+    function getStoredCustomName(key) {
+        const value = customDeviceNames[key];
+        return typeof value === 'string' && value.trim().length > 0
+            ? value.trim()
+            : '';
+    }
+
+    function setStoredCustomName(key, name) {
+        const trimmed = typeof name === 'string' ? name.trim() : '';
+        if (trimmed) {
+            customDeviceNames[key] = trimmed;
+        } else {
+            delete customDeviceNames[key];
+        }
+
+        saveCustomDeviceNames();
+    }
+
+    function getDeviceDisplayName(key, device) {
+        const stored = getStoredCustomName(key);
+        if (stored) {
+            return stored;
+        }
+
+        if (device?.deviceName) {
+            return device.deviceName;
+        }
+
+        if (device?.deviceId) {
+            return device.deviceId;
+        }
+
+        if (device?.ipv4) {
+            return device.ipv4;
+        }
+
+        return '未知设备';
+    }
+
+    function normalizeBatteryLevel(value) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+        }
+
+        const parsed = Number.parseFloat(value);
+        return Number.isFinite(parsed) ? parsed : undefined;
+    }
+
+    function normalizeBatteryStatus(value) {
+        if (typeof value === 'string') {
+            return value.trim();
+        }
+
+        return '';
+    }
+
+    function formatBattery(device) {
+        const levelRaw = normalizeBatteryLevel(device?.batteryLevelPercent);
+        const status = normalizeBatteryStatus(device?.batteryStatus);
+        const hasLevel = Number.isFinite(levelRaw) && levelRaw >= 0;
+        let levelText = '';
+
+        if (hasLevel) {
+            const rounded = Math.round(levelRaw * 10) / 10;
+            levelText = Number.isInteger(rounded)
+                ? `${rounded}%`
+                : `${rounded.toFixed(1)}%`;
+        }
+
+        const parts = [];
+        if (levelText) {
+            parts.push(levelText);
+        }
+        if (status) {
+            parts.push(status);
+        }
+
+        return parts.join(' · ');
+    }
+
+    async function sendBeepCommandForDevice(key) {
+        if (!window.udpHost?.sendCommand) {
+            status.textContent = 'Beep 功能不可用：缺少 udpHost 接口。';
+            return;
+        }
+
+        const device = clients.get(key);
+        if (!device) {
+            status.textContent = '设备不存在或已离线。';
+            return;
+        }
+
+        const host = (device.ipv4 || device.remoteAddress || '').trim();
+        const deviceName = getDeviceDisplayName(key, device);
+
+        if (!host) {
+            status.textContent = `${deviceName} 缺少 IP，无法发送 Beep。`;
+            appendLog('WARN', '缺少设备 IP，无法发送 Beep。', { name: deviceName });
+            return;
+        }
+
+        const port = Number.isInteger(device.commandPort)
+            ? device.commandPort
+            : Number.parseInt(portInput.value, 10) || 3939;
+
+        try {
+            const result = await window.udpHost.sendCommand({
+                action: 'beep',
+                payload: '',
+                includeCmdId: false,
+                cmdId: '',
+                sharedSecret: sharedSecretInput.value.trim(),
+                timestamp: Date.now(),
+                forcePayloadField: false,
+                host,
+                port,
+            });
+
+            appendLog('SEND', JSON.stringify(result.message, null, 2), { host, port, name: deviceName });
+            status.textContent = `已向 ${deviceName} 发送 Beep。`;
+        } catch (error) {
+            const message = error?.message || String(error);
+            status.textContent = `向 ${deviceName} 发送 Beep 失败：${message}`;
+            appendLog('ERROR', message, { host, port, name: deviceName });
+        }
+    }
 
     function updateListenStatus(message, isError = false) {
         currentListenMessage = message;
@@ -215,10 +379,14 @@
 
         const now = Date.now();
         const ordered = Array.from(clients.entries())
-            .map(([key, device]) => ({ key, device }))
+            .map(([key, device]) => ({
+                key,
+                device,
+                displayName: getDeviceDisplayName(key, device),
+            }))
             .sort((a, b) => {
-                const nameA = (a.device.deviceName || a.device.deviceId || '').toLowerCase();
-                const nameB = (b.device.deviceName || b.device.deviceId || '').toLowerCase();
+                const nameA = (a.displayName || '').toLowerCase();
+                const nameB = (b.displayName || '').toLowerCase();
                 if (nameA !== nameB) {
                     return nameA.localeCompare(nameB);
                 }
@@ -226,7 +394,7 @@
                 return (a.device.scene || '').localeCompare(b.device.scene || '');
             });
 
-        ordered.forEach(({ key, device }) => {
+        ordered.forEach(({ key, device, displayName }) => {
             const isOffline = now - device.lastSeen > HEARTBEAT_TIMEOUT_MS;
             if (isOffline) {
                 selectedDevices.delete(key);
@@ -245,15 +413,125 @@
             const header = document.createElement('div');
             header.className = 'header';
 
-            const name = document.createElement('h3');
-            name.className = 'name';
-            name.textContent = device.deviceName || device.deviceId || '未知设备';
+            const nameGroup = document.createElement('div');
+            nameGroup.className = 'name-group';
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'name';
+            nameInput.value = displayName;
+            nameInput.readOnly = true;
+            nameInput.spellcheck = false;
+            nameInput.autocomplete = 'off';
+
+            const renameButton = document.createElement('button');
+            renameButton.type = 'button';
+            renameButton.className = 'rename-button';
+            renameButton.textContent = '重命名';
+            renameButton.title = '设置自定义名称';
+
+            function stopEditing(saveChanges) {
+                if (nameInput.readOnly) {
+                    return;
+                }
+
+                nameInput.readOnly = true;
+                nameInput.classList.remove('editing');
+                renameButton.textContent = '重命名';
+                card.classList.remove('editing-name');
+
+                if (!saveChanges) {
+                    nameInput.value = getDeviceDisplayName(key, device);
+                    return;
+                }
+
+                const trimmed = nameInput.value.trim();
+                const stored = getStoredCustomName(key);
+                const defaultName = device.deviceName || device.deviceId || '';
+                const shouldClear = trimmed.length === 0 || trimmed === defaultName;
+                if (shouldClear) {
+                    if (stored) {
+                        setStoredCustomName(key, '');
+                        renderDeviceGrid();
+                    } else {
+                        nameInput.value = getDeviceDisplayName(key, device);
+                    }
+                    return;
+                }
+
+                if (trimmed !== stored) {
+                    setStoredCustomName(key, trimmed);
+                    renderDeviceGrid();
+                } else {
+                    nameInput.value = getDeviceDisplayName(key, device);
+                }
+            }
+
+            renameButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                if (nameInput.readOnly) {
+                    nameInput.readOnly = false;
+                    nameInput.classList.add('editing');
+                    card.classList.add('editing-name');
+                    renameButton.textContent = '保存';
+                    nameInput.focus();
+                    nameInput.select();
+                } else {
+                    stopEditing(true);
+                }
+            });
+
+            nameInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    stopEditing(true);
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    stopEditing(false);
+                }
+            });
+
+            nameInput.addEventListener('blur', () => {
+                stopEditing(true);
+            });
+
+            nameInput.addEventListener('mousedown', (event) => {
+                if (nameInput.readOnly) {
+                    event.preventDefault();
+                }
+                event.stopPropagation();
+            });
+
+            nameInput.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+
+            nameGroup.append(nameInput, renameButton);
+
+            const headerActions = document.createElement('div');
+            headerActions.className = 'header-actions';
 
             const badge = document.createElement('span');
             badge.className = 'badge';
             badge.textContent = isOffline ? '离线' : (device.scene || 'Idle');
 
-            header.append(name, badge);
+            const beepButton = document.createElement('button');
+            beepButton.type = 'button';
+            beepButton.className = 'beep-button';
+            beepButton.textContent = 'Beep';
+            beepButton.title = '向设备发送 Beep';
+            beepButton.disabled = isOffline;
+            beepButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                if (isOffline) {
+                    return;
+                }
+
+                void sendBeepCommandForDevice(key);
+            });
+
+            headerActions.append(badge, beepButton);
+            header.append(nameGroup, headerActions);
 
             const lastSeen = document.createElement('p');
             lastSeen.className = 'muted';
@@ -268,7 +546,8 @@
                 createDetail('IPv4', device.ipv4 || device.remoteAddress || '未知'),
                 createDetail('命令端口', device.commandPort ? String(device.commandPort) : (portInput.value || '—')),
                 createDetail('平台', device.platform || '—'),
-                createDetail('版本', device.buildVersion || '—')
+                createDetail('版本', device.buildVersion || '—'),
+                createDetail('电量', formatBattery(device))
             );
 
             const toggleButton = document.createElement('button');
@@ -496,6 +775,8 @@
                 ipv4: payload.ipv4,
                 scene: payload.scene,
                 commandPort: Number.isInteger(payload.commandPort) ? payload.commandPort : undefined,
+                batteryLevelPercent: normalizeBatteryLevel(payload.batteryLevelPercent),
+                batteryStatus: normalizeBatteryStatus(payload.batteryStatus),
             });
         }
     }
@@ -511,6 +792,8 @@
             ipv4: payload?.ipv4 || packet.address,
             scene: payload?.scene || '',
             commandPort: payload?.commandPort,
+            batteryLevelPercent: payload?.batteryLevelPercent,
+            batteryStatus: payload?.batteryStatus,
             remoteAddress: packet.address,
             remotePort: packet.port,
             firstSeen: now,
@@ -672,8 +955,8 @@
         const previewState = buildPreview();
         const cmdId = cmdIdInput.value.trim();
         const selectedTargets = Array.from(selectedDevices)
-            .map((key) => clients.get(key))
-            .filter(Boolean);
+            .map((key) => ({ key, device: clients.get(key) }))
+            .filter((entry) => Boolean(entry.device));
 
         if (previewState.payloadError) {
             status.textContent = '请先修复 Payload JSON。';
@@ -707,10 +990,10 @@
             let successCount = 0;
             const failures = [];
 
-            for (const device of selectedTargets) {
+            for (const { key, device } of selectedTargets) {
                 const host = (device.ipv4 || device.remoteAddress || '').trim();
                 const devicePort = Number.isInteger(device.commandPort) ? device.commandPort : port;
-                const deviceName = device.deviceName || device.deviceId || host || '未知设备';
+                const deviceName = getDeviceDisplayName(key, device) || host || '未知设备';
 
                 if (!host) {
                     const message = `${deviceName}：缺少 IP，已跳过。`;
@@ -733,11 +1016,11 @@
                         { host, port: devicePort, name: deviceName }
                     );
                 } catch (error) {
-            const failureMessage = `${deviceName}：${error.message}`;
-            failures.push(failureMessage);
-            appendLog('ERROR', error.message, { host, port: devicePort, name: deviceName });
-        }
-    }
+                    const failureMessage = `${deviceName}：${error.message}`;
+                    failures.push(failureMessage);
+                    appendLog('ERROR', error.message, { host, port: devicePort, name: deviceName });
+                }
+            }
 
             if (failures.length > 0) {
                 status.textContent = `${successCount} 台成功，${failures.length} 台失败。`;

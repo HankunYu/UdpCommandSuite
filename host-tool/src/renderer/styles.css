@@ -370,14 +370,80 @@ button:disabled {
 .device-card .header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
 }
 
+.device-card .name-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
 .device-card .name {
+    flex: 1;
     font-size: 1rem;
     font-weight: 600;
-    margin: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-primary);
+    padding: 4px 6px;
+    min-width: 0;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.device-card .name:focus {
+    outline: none;
+}
+
+.device-card .name.editing {
+    border-color: var(--accent);
+    background: rgba(91, 140, 255, 0.18);
+}
+
+.device-card .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.device-card .rename-button,
+.device-card .beep-button {
+    border-radius: 8px;
+    border: 1px solid rgba(115, 130, 170, 0.28);
+    background: rgba(12, 16, 31, 0.6);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    padding: 4px 10px;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.device-card .rename-button:hover:not(:disabled),
+.device-card .rename-button:focus-visible {
+    border-color: var(--accent-strong);
+    color: var(--text-primary);
+    background: rgba(91, 140, 255, 0.16);
+}
+
+.device-card .beep-button {
+    background: rgba(91, 140, 255, 0.18);
+    border-color: var(--accent-strong);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.device-card .beep-button:hover:not(:disabled),
+.device-card .beep-button:focus-visible {
+    background: rgba(91, 140, 255, 0.28);
+    color: var(--text-primary);
+}
+
+.device-card .beep-button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
 }
 
 .badge {
