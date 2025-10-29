@@ -1,19 +1,16 @@
 # UDP Command Suite
 
-Reusable toolkit extracted from Mnemosyne VR that bundles:
+Reusable toolkit extracted from Mnemosyne VR.
 
-- A Unity package (`com.mnemosyne.udpcommands`) containing `UdpCommandListener`, `UdpClientReporter`, and the supporting singleton base for receiving JSON UDP commands and reporting headset presence.
-- An Electron host application (`udp-command-hosttool`) for broadcasting commands, handling acknowledgements, and managing connected client rosters.
+This repository contains an Electron host application (`udp-command-hosttool`) for broadcasting UDP commands, handling acknowledgements, and managing connected client rosters.
+
+For the Unity package (`com.mnemosyne.udpcommands`) containing `UdpCommandListener`, `UdpClientReporter`, and supporting components, please visit: **https://package.hankun.online/**
 
 ## Layout
 
 ```
 UdpCommandSuite/
   README.md
-  unity/                # Unity Package Manager entry
-    Runtime/
-    Documentation~/
-    package.json
   host-tool/            # Electron desktop app
     src/
     package.json
